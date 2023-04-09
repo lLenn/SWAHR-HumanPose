@@ -1,0 +1,22 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Distance Validation",
+            "type": "python",
+            "request": "launch",
+            "program": "tools/dist_valid.py",
+            "args": [
+                "--cfg", 
+                "experiments/coco/higher_hrnet/w32_512_adam_lr1e-3.yaml",
+                "TEST.MODEL_FILE",
+                "models/pose_coco/pose_higher_hrnet_w32_512.pth"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": true
+        }
+    ]
+}

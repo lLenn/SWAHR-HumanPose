@@ -97,30 +97,12 @@ def _print_name_value(logger, name_value, full_arch_name):
 
 
 
-def worker(gpu_id, dataset, indices, cfg, logger, final_output_dir, pred_queue):
-    os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
-
-    model = eval("models." + cfg.MODEL.NAME + ".get_pose_net")(cfg, is_train=False)
-
-    dump_input = torch.rand((1, 3, cfg.DATASET.INPUT_SIZE, cfg.DATASET.INPUT_SIZE))
-
-    if cfg.FP16.ENABLED:
-        model = network_to_half(model)
-
-    if cfg.TEST.MODEL_FILE:
-        logger.info("=> loading model from {}".format(cfg.TEST.MODEL_FILE))
-        model.load_state_dict(torch.load(cfg.TEST.MODEL_FILE), strict=True)
-    else:
-        model_state_file = os.path.join(final_output_dir, "model_best.pth.tar")
-        logger.info("=> loading model from {}".format(model_state_file))
-        model.load_state_dict(torch.load(model_state_file))
-        
-    model = torch.nn.DataParallel(model, device_ids=cfg.GPUS).cuda()
+def worker(model, dataset, indices, cfg, pred_queue):
     model.eval()
-
+    
     sub_dataset = torch.utils.data.Subset(dataset, indices)
     data_loader = torch.utils.data.DataLoader(
-        sub_dataset, sampler=None, batch_size=1, shuffle=False, num_workers=0, pin_memory=False
+        sub_dataset, num_workers=1, pin_memory=True
     )
 
     if cfg.MODEL.NAME == "pose_hourglass":
@@ -245,7 +227,25 @@ def main():
 
     _, dataset = make_test_dataloader(cfg)
 
-    total_size = len(dataset)
+    model = eval("models." + cfg.MODEL.NAME + ".get_pose_net")(cfg, is_train=False)
+
+    dump_input = torch.rand((1, 3, cfg.DATASET.INPUT_SIZE, cfg.DATASET.INPUT_SIZE))
+
+    if cfg.FP16.ENABLED:
+        model = network_to_half(model)
+
+    if cfg.TEST.MODEL_FILE:
+        logger.info("=> loading model from {}".format(cfg.TEST.MODEL_FILE))
+        model.load_state_dict(torch.load(cfg.TEST.MODEL_FILE, map_location=torch.device("cuda")), strict=True)
+    else:
+        model_state_file = os.path.join(final_output_dir, "model_best.pth.tar")
+        logger.info("=> loading model from {}".format(model_state_file))
+        model.load_state_dict(torch.load(model_state_file, map_location=torch.device("cuda")))
+        
+    # model = torch.nn.DataParallel(model, device_ids=cfg.GPUS).cuda()
+    model = model.cuda()
+    
+    total_size = 20 # len(dataset)
     pred_queue = Queue(100)
     workers = []
     for i in range(args.world_size):
@@ -253,7 +253,7 @@ def main():
         p = Process(
             target = worker,
             args = (
-                i, dataset, indices, cfg, logger, final_output_dir, pred_queue
+                model, dataset, indices, cfg, pred_queue
             )
         )
         p.start()
@@ -285,8 +285,8 @@ def main():
 
 
 if __name__ == "__main__":
-    print(f"Cuda available: {torch.cuda.is_available()}")
-    print(f"Cuda device count: {torch.cuda.device_count()}")
-    torch.multiprocessing.set_start_method('spawn')
+    # print(f"Cuda available: {torch.cuda.is_available()}")
+    # print(f"Cuda device count: {torch.cuda.device_count()}")
+    # torch.multiprocessing.set_start_method('spawn')
     main()
     
