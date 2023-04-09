@@ -1,0 +1,7 @@
+.venv
+data/
+log/
+models/
+output/
+__pycache__/
+.history/

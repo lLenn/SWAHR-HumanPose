@@ -51,6 +51,7 @@ import json
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Test keypoints network")
     # general
@@ -286,7 +287,4 @@ def main():
 
 if __name__ == "__main__":
     print(f"Cuda available: {torch.cuda.is_available()}")
-    print(f"Cuda device count: {torch.cuda.device_count()}")
-    torch.multiprocessing.set_start_method('spawn')
     main()
-    
