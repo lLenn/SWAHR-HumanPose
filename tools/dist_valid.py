@@ -97,12 +97,31 @@ def _print_name_value(logger, name_value, full_arch_name):
 
 
 
-def worker(model, dataset, indices, cfg, pred_queue):
+def worker(gpu_id, dataset, indices, cfg, logger, final_output_dir, pred_queue):
+    # os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
+    
+    model = eval("models." + cfg.MODEL.NAME + ".get_pose_net")(cfg, is_train=False)
+
+    dump_input = torch.rand((1, 3, cfg.DATASET.INPUT_SIZE, cfg.DATASET.INPUT_SIZE))
+
+    if cfg.FP16.ENABLED:
+        model = network_to_half(model)
+
+    if cfg.TEST.MODEL_FILE:
+        logger.info("=> loading model from {}".format(cfg.TEST.MODEL_FILE))
+        model.load_state_dict(torch.load(cfg.TEST.MODEL_FILE), strict=True)
+    else:
+        model_state_file = os.path.join(final_output_dir, "model_best.pth.tar")
+        logger.info("=> loading model from {}".format(model_state_file))
+        model.load_state_dict(torch.load(model_state_file))
+        
+    model = torch.nn.DataParallel(model, device_ids=cfg.GPUS).cuda()
+    
     model.eval()
     
     sub_dataset = torch.utils.data.Subset(dataset, indices)
     data_loader = torch.utils.data.DataLoader(
-        sub_dataset, num_workers=1, pin_memory=True
+        sub_dataset, sampler=None, batch_size=1, shuffle=False, num_workers=0, pin_memory=False
     )
 
     if cfg.MODEL.NAME == "pose_hourglass":
@@ -156,9 +175,9 @@ def worker(model, dataset, indices, cfg, pred_queue):
             final_heatmaps = final_heatmaps / float(len(cfg.TEST.SCALE_FACTOR))
             tags = torch.cat(tags_list, dim=4)
 
-            visual = False
+            visual = True
             if visual:
-                visual_heatmap = torch.max(final_skelemaps[0], dim=0, keepdim=True)[0]
+                visual_heatmap = torch.max(final_heatmaps[0], dim=0, keepdim=True)[0]
                 visual_heatmap = (
                     visual_heatmap.cpu().numpy().repeat(3, 0).transpose(1, 2, 0)
                 )
@@ -199,7 +218,7 @@ def worker(model, dataset, indices, cfg, pred_queue):
 
         for idx in range(len(final_results)):
             all_preds.append({
-                "keypoints": final_results[idx][:,:3].reshape(-1,).astype(np.float).tolist(),
+                "keypoints": final_results[idx][:,:3].reshape(-1,).astype(float).tolist(),
                 "image_id": int(file_name[-16:-4]),
                 "score": float(scores[idx]),
                 "category_id": 1
@@ -226,26 +245,8 @@ def main():
     torch.backends.cudnn.enabled = cfg.CUDNN.ENABLED
 
     _, dataset = make_test_dataloader(cfg)
-
-    model = eval("models." + cfg.MODEL.NAME + ".get_pose_net")(cfg, is_train=False)
-
-    dump_input = torch.rand((1, 3, cfg.DATASET.INPUT_SIZE, cfg.DATASET.INPUT_SIZE))
-
-    if cfg.FP16.ENABLED:
-        model = network_to_half(model)
-
-    if cfg.TEST.MODEL_FILE:
-        logger.info("=> loading model from {}".format(cfg.TEST.MODEL_FILE))
-        model.load_state_dict(torch.load(cfg.TEST.MODEL_FILE, map_location=torch.device("cuda")), strict=True)
-    else:
-        model_state_file = os.path.join(final_output_dir, "model_best.pth.tar")
-        logger.info("=> loading model from {}".format(model_state_file))
-        model.load_state_dict(torch.load(model_state_file, map_location=torch.device("cuda")))
-        
-    # model = torch.nn.DataParallel(model, device_ids=cfg.GPUS).cuda()
-    model = model.cuda()
     
-    total_size = 20 # len(dataset)
+    total_size = len(dataset)
     pred_queue = Queue(100)
     workers = []
     for i in range(args.world_size):
@@ -253,7 +254,7 @@ def main():
         p = Process(
             target = worker,
             args = (
-                model, dataset, indices, cfg, pred_queue
+                i, dataset, indices, cfg, logger, final_output_dir, pred_queue
             )
         )
         p.start()
@@ -287,6 +288,6 @@ def main():
 if __name__ == "__main__":
     # print(f"Cuda available: {torch.cuda.is_available()}")
     # print(f"Cuda device count: {torch.cuda.device_count()}")
-    # torch.multiprocessing.set_start_method('spawn')
+    # torch.multiprocessing.set_start_method('spawn', force=True)
     main()
     

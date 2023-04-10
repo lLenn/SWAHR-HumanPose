@@ -218,7 +218,7 @@ def worker(gpu_id, dataset, indices, cfg, logger, final_output_dir, pred_queue):
 
         for idx in range(len(final_results)):
             all_preds.append({
-                "keypoints": final_results[idx][:,:3].reshape(-1,).astype(np.float).tolist(),
+                "keypoints": final_results[idx][:,:3].reshape(-1,).astype(float).tolist(),
                 "image_id": int(file_name[-16:-4]),
                 "score": float(scores[idx]),
                 "category_id": 1

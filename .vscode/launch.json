@@ -10,6 +10,8 @@
             "request": "launch",
             "program": "tools/dist_valid.py",
             "args": [
+                "--world_size",
+                "4",
                 "--cfg", 
                 "experiments/coco/higher_hrnet/w32_512_adam_lr1e-3.yaml",
                 "TEST.MODEL_FILE",
