@@ -21,7 +21,7 @@ import numpy as np
 from torch.utils.data import Dataset
 
 from pycocotools.cocoeval import COCOeval
-from utils import zipreader
+from ..utils import zipreader
 
 logger = logging.getLogger(__name__)
 

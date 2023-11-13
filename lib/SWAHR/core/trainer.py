@@ -13,8 +13,8 @@ import logging
 import os
 import time
 
-from utils.utils import AverageMeter
-from utils.vis import save_debug_images
+from ..utils.utils import AverageMeter
+from ..utils.vis import save_debug_images
 from tqdm import tqdm
 
 
